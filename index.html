@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8' />
+    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
+    <meta name="description" content="2Checkout Java Tutorial : Java Integration Tutorial" />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>2Checkout Java Tutorial</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/2Checkout/2checkout-java-tutorial">View on GitHub</a>
+
+          <h1 id="project_title">2Checkout Java Tutorial</h1>
+          <h2 id="project_tagline">Java Integration Tutorial</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/2Checkout/2checkout-java-tutorial/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/2Checkout/2checkout-java-tutorial/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <h2>2Checkout Java Integration Tutorial</h2>
+
+<hr><p>In this tutorial we will walk through integrating the 2Checkout payment method into an existing site built on the Spark micro framework and TwitterBootstrap 2.1.0. The source for the example application used in this tutorial can be accessed in this Github repository.</p>
+
+<h2>Setting up the Example Application</h2>
+
+<p>We need an existing example application to demonstrate the integration so lets download or clone the 2checkout-java-tutorial tutorial application.</p>
+
+<div class="highlight"><pre><span class="nv">$ </span>git clone https://github.com/2checkout/2checkout-java-tutorial.git
+</pre></div>
+
+<p>This repository contains both an example before and after application so that we can follow along with the tutorial using the site_before app and compare the result with the site_after app. We can start by moving the site_before directory to the webroot directory on our server.</p>
+
+<p>We will need to pull in some dependencies to get the application working.</p>
+
+<ul>
+<li><a href="http://code.google.com/p/spark-java/downloads/list">Spark -v 0.9.9.3 Snapshot and dependenciess</a></li>
+<li><a href="http://www.oracle.com/technetwork/java/javamail/index-138643.html">JavaMail -v 1.4.5</a></li>
+</ul><p>Let's go ahead and startup the example application by running it in our IDE.</p>
+
+<p>We can then view it at <a href="http://localhost:4567">http://localhost:4567</a>.</p>
+
+<p><img src="http://github.com/2checkout/2checkout-java-tutorial/raw/master/img/egood-1.png" alt=""></p>
+
+<p>You can see that this site requires users to enter in their email address so we can email them the downloadable product.</p>
+
+<p>The SendMail class is configured to use gmail so to see a working demonstration, just add your gmail address for the username and add your gmail password.</p>
+
+<p>In this tutorial, we will integrate the 2Checkout payment method so that the user must purchase the product before we send it by email. We will also setup a listener that can be used to send the product out on the Fraud Status Changed notification send by 2Checkout. To provide an example API usage, we will fire a create comment API call to add a note to the order when we have delivered the product to the buyer.</p>
+
+<h2>Adding the 2Checkout Java Library</h2>
+
+<p>The 2Checkout Java library provides us with a simple bindings to the API, INS and Checkout process so that we can integrate each feature with only a few lines of code. We can download or clone the library at <a href="https://github.com/2checkout/2checkout-java">https://github.com/2checkout/2checkout-java</a>.</p>
+
+<p>Including the library is as easy as <a href="https://github.com/downloads/2checkout/2checkout-java/twocheckout-java-latest.jar">downloading the jar</a>, adding it and it's dependencies to your project, and importing into Home.java.</p>
+
+<div class="highlight"><pre><span class="kn">import</span> <span class="nn">com.twocheckout.*</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">com.twocheckout.model.Sale</span><span class="o">;</span>
+</pre></div>
+
+<h2>Setup Order</h2>
+
+<p>Let's take a look at our current application.</p>
+
+<div class="highlight"><pre><span class="kd">public</span> <span class="kd">class</span> <span class="nc">Home</span> <span class="o">{</span>
+
+    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="n">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="o">{</span>
+
+        <span class="n">get</span><span class="o">(</span><span class="k">new</span> <span class="n">Route</span><span class="o">(</span><span class="s">"/"</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nd">@Override</span>
+            <span class="kd">public</span> <span class="n">Object</span> <span class="nf">handle</span><span class="o">(</span><span class="n">Request</span> <span class="n">request</span><span class="o">,</span> <span class="n">Response</span> <span class="n">response</span><span class="o">)</span> <span class="o">{</span>
+                <span class="c1">//Display Homepage</span>
+                <span class="n">FileRead</span> <span class="n">file</span> <span class="o">=</span> <span class="k">new</span> <span class="n">FileRead</span><span class="o">();</span>
+                <span class="n">String</span> <span class="n">content</span> <span class="o">=</span> <span class="s">"Please try again later."</span><span class="o">;</span>
+                <span class="k">try</span> <span class="o">{</span>
+                    <span class="n">content</span> <span class="o">=</span> <span class="n">file</span><span class="o">.</span><span class="na">readFile</span><span class="o">(</span><span class="s">"static/home.html"</span><span class="o">);</span>
+                <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="n">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                    <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+                <span class="o">}</span>
+                <span class="k">return</span> <span class="n">content</span><span class="o">;</span>
+            <span class="o">}</span>
+        <span class="o">});</span>
+
+        <span class="n">get</span><span class="o">(</span><span class="k">new</span> <span class="n">Route</span><span class="o">(</span><span class="s">"/order"</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nd">@Override</span>
+            <span class="kd">public</span> <span class="n">Object</span> <span class="nf">handle</span><span class="o">(</span><span class="n">Request</span> <span class="n">request</span><span class="o">,</span> <span class="n">Response</span> <span class="n">response</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">SendMail</span><span class="o">.</span><span class="na">send</span><span class="o">(</span><span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"email"</span><span class="o">));</span>
+                <span class="k">return</span> <span class="s">"Your download was sent by email."</span><span class="o">;</span>
+            <span class="o">}</span>
+        <span class="o">});</span>
+    <span class="o">}</span>
+
+<span class="o">}</span>
+</pre></div>
+
+<p>As you can see, we are just grabbing the email address entered by the user and sending them the downloadable product by email. We want the user to have to pay for the product before we actually deliver it to them so lets go ahead and replace that form with a link to the order method and pass the buyer to 2Checkout.</p>
+
+<p><strong>Home.html</strong></p>
+
+<div class="highlight"><pre>    <span class="nt">&lt;div</span> <span class="na">class=</span><span class="s">"row"</span><span class="nt">&gt;</span>
+        <span class="nt">&lt;div</span> <span class="na">class=</span><span class="s">"span12"</span><span class="nt">&gt;</span>
+            <span class="nt">&lt;p&gt;&lt;a</span> <span class="na">class=</span><span class="s">"btn btn-primary btn-large"</span> <span class="na">href=</span><span class="s">"/order"</span><span class="nt">&gt;</span>Buy Now<span class="nt">&lt;/a&gt;&lt;/p&gt;</span>
+            <span class="nt">&lt;h2&gt;</span>Only $1.00!<span class="nt">&lt;/h2&gt;</span>
+            <span class="nt">&lt;p&gt;</span>For one low price you get access to this great downloadable product!<span class="nt">&lt;/p&gt;</span>
+        <span class="nt">&lt;/div&gt;</span>
+    <span class="nt">&lt;/div&gt;</span>
+</pre></div>
+
+<p><strong>Home.java</strong></p>
+
+<div class="highlight"><pre>    <span class="n">get</span><span class="o">(</span><span class="k">new</span> <span class="n">Route</span><span class="o">(</span><span class="s">"/order"</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nd">@Override</span>
+        <span class="kd">public</span> <span class="n">Object</span> <span class="nf">handle</span><span class="o">(</span><span class="n">Request</span> <span class="n">request</span><span class="o">,</span> <span class="n">Response</span> <span class="n">response</span><span class="o">)</span> <span class="o">{</span>
+            <span class="c1">//Create a form that automatically passes the buyer and sale to 2Checkout</span>
+            <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">params</span> <span class="o">=</span> <span class="k">new</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;();</span>
+            <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"sid"</span><span class="o">,</span> <span class="s">"1817037"</span><span class="o">);</span>
+            <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"mode"</span><span class="o">,</span> <span class="s">"2CO"</span><span class="o">);</span>
+            <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"li_0_name"</span><span class="o">,</span> <span class="s">"Awesome Product"</span><span class="o">);</span>
+            <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"li_0_price"</span><span class="o">,</span> <span class="s">"1.00"</span><span class="o">);</span>
+            <span class="n">String</span> <span class="n">form</span> <span class="o">=</span> <span class="n">TwocheckoutCharge</span><span class="o">.</span><span class="na">submit</span><span class="o">(</span><span class="n">params</span><span class="o">);</span>
+            <span class="n">form</span> <span class="o">=</span> <span class="s">"&lt;html&gt;"</span> <span class="o">+</span> <span class="n">form</span> <span class="o">+</span> <span class="s">"&lt;/html&gt;"</span><span class="o">;</span>
+            <span class="k">return</span> <span class="n">form</span><span class="o">;</span>
+        <span class="o">}</span>
+    <span class="o">});</span>
+</pre></div>
+
+<p>Lets take a look at what we did here. First swapped the email form with a link to the order page because we no longer need to collect the users email. (_It will be collected and returned by 2Checkout._)</p>
+
+<div class="highlight"><pre><span class="nt">&lt;a</span> <span class="na">class=</span><span class="s">"btn btn-primary btn-large"</span> <span class="na">href=</span><span class="s">"/order"</span><span class="nt">&gt;</span>Buy Now<span class="nt">&lt;/a&gt;</span>
+</pre></div>
+
+<p>Then we create a HashMap of sale parameters to pass to 2Checkout using the <a href="https://www.2checkout.com/blog/knowledge-base/merchants/tech-support/3rd-party-carts/parameter-sets/pass-through-product-parameter-set/">Pass-Through-Products parameter set</a>.</p>
+
+<div class="highlight"><pre>    <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">params</span> <span class="o">=</span> <span class="k">new</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;();</span>
+    <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"sid"</span><span class="o">,</span> <span class="s">"1817037"</span><span class="o">);</span>
+    <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"mode"</span><span class="o">,</span> <span class="s">"2CO"</span><span class="o">);</span>
+    <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"li_0_name"</span><span class="o">,</span> <span class="s">"Awesome Product"</span><span class="o">);</span>
+    <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"li_0_price"</span><span class="o">,</span> <span class="s">"1.00"</span><span class="o">);</span>
+</pre></div>
+
+<p>Finially we pass the parameters and the buyer to our custom checkout page on 2Checkout's secure server to complete the order.</p>
+
+<div class="highlight"><pre>    <span class="n">String</span> <span class="n">form</span> <span class="o">=</span> <span class="n">TwocheckoutCharge</span><span class="o">.</span><span class="na">submit</span><span class="o">(</span><span class="n">params</span><span class="o">);</span>
+    <span class="n">form</span> <span class="o">=</span> <span class="s">"&lt;html&gt;"</span> <span class="o">+</span> <span class="n">form</span> <span class="o">+</span> <span class="s">"&lt;/html&gt;"</span><span class="o">;</span>
+    <span class="k">return</span> <span class="n">form</span><span class="o">;</span>
+</pre></div>
+
+<h2>Passback</h2>
+
+<p>When the order is completed, 2Checkout will return the buyer and the sale parameters to the URL that we specify as the approved URL in our account. This URL can also be passed in dynamically for each sale using the <code>x_receipt_link_url</code> parameter.</p>
+
+<p>Lets create the return URL by adding a return method. We will also need to setup our return method to handle the passback and we will utilize 2Checkout's API to add a comment to the sale when we deliver the product to the buyer.</p>
+
+<p>Home.java</p>
+
+<div class="highlight"><pre>    <span class="n">get</span><span class="o">(</span><span class="k">new</span> <span class="n">Route</span><span class="o">(</span><span class="s">"/return"</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nd">@Override</span>
+        <span class="kd">public</span> <span class="n">Object</span> <span class="nf">handle</span><span class="o">(</span><span class="n">Request</span> <span class="n">request</span><span class="o">,</span> <span class="n">Response</span> <span class="n">response</span><span class="o">)</span> <span class="o">{</span>
+            <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">params</span> <span class="o">=</span> <span class="k">new</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;();</span>
+            <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"sid"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"sid"</span><span class="o">));</span>
+            <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"total"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"total"</span><span class="o">));</span>
+            <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"order_number"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"order_number"</span><span class="o">));</span>
+            <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"key"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"key"</span><span class="o">));</span>
+            <span class="n">Boolean</span> <span class="n">result</span> <span class="o">=</span> <span class="n">TwocheckoutReturn</span><span class="o">.</span><span class="na">check</span><span class="o">(</span><span class="n">params</span><span class="o">,</span> <span class="s">"tango"</span><span class="o">);</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+                <span class="c1">//Email product to the buyer</span>
+                <span class="n">SendMail</span><span class="o">.</span><span class="na">send</span><span class="o">(</span><span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"email"</span><span class="o">));</span>
+                <span class="c1">//Add comment to the order for our records.</span>
+                <span class="c1">//(Not Required: Just here to demonstrate API usage.)</span>
+                <span class="n">Twocheckout</span><span class="o">.</span><span class="na">apiusername</span> <span class="o">=</span> <span class="s">"APIuser1817037"</span><span class="o">;</span>
+                <span class="n">Twocheckout</span><span class="o">.</span><span class="na">apipassword</span> <span class="o">=</span> <span class="s">"APIpass1817037"</span><span class="o">;</span>
+                <span class="n">Sale</span> <span class="n">sale</span> <span class="o">=</span> <span class="n">TwocheckoutSale</span><span class="o">.</span><span class="na">retrieve</span><span class="o">(</span><span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"order_number"</span><span class="o">));</span>
+                <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">comment_params</span> <span class="o">=</span> <span class="k">new</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;();</span>
+                <span class="n">comment_params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"sale_comment"</span><span class="o">,</span> <span class="s">"Product delivered to buyer by email."</span><span class="o">);</span>
+                <span class="n">sale</span><span class="o">.</span><span class="na">comment</span><span class="o">(</span><span class="n">comment_params</span><span class="o">);</span>
+
+                <span class="c1">//Display Order Success Page</span>
+                <span class="n">FileRead</span> <span class="n">file</span> <span class="o">=</span> <span class="k">new</span> <span class="n">FileRead</span><span class="o">();</span>
+                <span class="n">String</span> <span class="n">content</span> <span class="o">=</span> <span class="s">"Please try again later."</span><span class="o">;</span>
+                <span class="k">try</span> <span class="o">{</span>
+                    <span class="n">content</span> <span class="o">=</span> <span class="n">file</span><span class="o">.</span><span class="na">readFile</span><span class="o">(</span><span class="s">"static/return.html"</span><span class="o">);</span>
+                <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="n">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                    <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+                <span class="o">}</span>
+                <span class="k">return</span> <span class="n">content</span><span class="o">;</span>
+            <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+                <span class="k">return</span> <span class="s">"There was a problem with your order, please contact us for assistance."</span><span class="o">;</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+    <span class="o">});</span>
+</pre></div>
+
+<p>First we need to validate the MD5 Hash returned by 2Checkout, so we grab the <code>sid</code>, <code>total</code>, <code>order_number</code> and <code>key</code> from the parameters returned by 2Checkout and assign them to the <code>params</code> HashMap.</p>
+
+<div class="highlight"><pre>    <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">params</span> <span class="o">=</span> <span class="k">new</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;();</span>
+    <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"sid"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"sid"</span><span class="o">));</span>
+    <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"total"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"total"</span><span class="o">));</span>
+    <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"order_number"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"order_number"</span><span class="o">));</span>
+    <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"key"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"key"</span><span class="o">));</span>
+</pre></div>
+
+<p>Then we pass the HashMap and our secret word to the <code>TwocheckoutReturn.check()</code> binding as the first argument and our secret word as the second argument. This method will return true if the hash matches.</p>
+
+<div class="highlight"><pre>    <span class="n">Boolean</span> <span class="n">result</span> <span class="o">=</span> <span class="n">TwocheckoutReturn</span><span class="o">.</span><span class="na">check</span><span class="o">(</span><span class="n">params</span><span class="o">,</span> <span class="s">"tango"</span><span class="o">);</span>
+</pre></div>
+
+<p>If the result true, we send the email to the buyer, add a comment to the sale using 2Checkout's API and display the return page. If the response is false, we display and error message.</p>
+
+<div class="highlight"><pre>    <span class="k">if</span> <span class="o">(</span><span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+        <span class="c1">//Email product to the buyer</span>
+        <span class="n">SendMail</span><span class="o">.</span><span class="na">send</span><span class="o">(</span><span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"email"</span><span class="o">));</span>
+        <span class="c1">//Add comment to the order for our records.</span>
+        <span class="c1">//(Not Required: Just here to demonstrate API usage.)</span>
+        <span class="n">Twocheckout</span><span class="o">.</span><span class="na">apiusername</span> <span class="o">=</span> <span class="s">"APIuser1817037"</span><span class="o">;</span>
+        <span class="n">Twocheckout</span><span class="o">.</span><span class="na">apipassword</span> <span class="o">=</span> <span class="s">"APIpass1817037"</span><span class="o">;</span>
+        <span class="n">Sale</span> <span class="n">sale</span> <span class="o">=</span> <span class="n">TwocheckoutSale</span><span class="o">.</span><span class="na">retrieve</span><span class="o">(</span><span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"order_number"</span><span class="o">));</span>
+        <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">comment_params</span> <span class="o">=</span> <span class="k">new</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;();</span>
+        <span class="n">comment_params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"sale_comment"</span><span class="o">,</span> <span class="s">"Product delivered to buyer by email."</span><span class="o">);</span>
+        <span class="n">sale</span><span class="o">.</span><span class="na">comment</span><span class="o">(</span><span class="n">comment_params</span><span class="o">);</span>
+
+        <span class="c1">//Display Order Success Page</span>
+        <span class="n">FileRead</span> <span class="n">file</span> <span class="o">=</span> <span class="k">new</span> <span class="n">FileRead</span><span class="o">();</span>
+        <span class="n">String</span> <span class="n">content</span> <span class="o">=</span> <span class="s">"Please try again later."</span><span class="o">;</span>
+        <span class="k">try</span> <span class="o">{</span>
+            <span class="n">content</span> <span class="o">=</span> <span class="n">file</span><span class="o">.</span><span class="na">readFile</span><span class="o">(</span><span class="s">"static/return.html"</span><span class="o">);</span>
+        <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="n">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+            <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+        <span class="o">}</span>
+        <span class="k">return</span> <span class="n">content</span><span class="o">;</span>
+    <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="s">"There was a problem with your order, please contact us for assistance."</span><span class="o">;</span>
+    <span class="o">}</span>
+</pre></div>
+
+<p>Now we can setup our return method, enter our secret word and provide the approved URL path "http://localhost:4567/return" under the Site Management page in our 2Checkout admin.</p>
+
+<p><strong>Site Management Page</strong>
+<img src="http://github.com/2checkout/2checkout-java-tutorial/raw/master/img/egood-2.png" alt=""></p>
+
+<p><strong>Lets try it out with a live sale.</strong>
+<img src="http://github.com/2checkout/2checkout-java-tutorial/raw/master/img/egood-1.png" alt=""></p>
+
+<p><strong>Enter in our billing information and submit the payment.</strong>
+<img src="http://github.com/2checkout/2checkout-java-tutorial/raw/master/img/egood-4.png" alt=""></p>
+
+<p><img src="http://github.com/2checkout/2checkout-java-tutorial/raw/master/img/egood-5.png" alt=""></p>
+
+<h2>Notifications</h2>
+
+<p>2Checkout will send notifications to our application under the following circumstances.</p>
+
+<ul>
+<li>Order Created</li>
+<li>Fraud Status Changed</li>
+<li>Shipping Status Changed</li>
+<li>Invoice Status Changed</li>
+<li>Refund Issued</li>
+<li>Recurring Installment Success</li>
+<li>Recurring Installment Failed</li>
+<li>Recurring Stopped</li>
+<li>Recurring Complete</li>
+<li>Recurring Restarted</li>
+</ul><p>For our application, we are interested in the Fraud Status Changed message in case we would rather wait for the 2Checkout fraud review result before sending the file to the buyer. To handle this message, we will create a new notification route.</p>
+
+<p>Home.java</p>
+
+<div class="highlight"><pre>    <span class="n">post</span><span class="o">(</span><span class="k">new</span> <span class="n">Route</span><span class="o">(</span><span class="s">"/notification"</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nd">@Override</span>
+        <span class="kd">public</span> <span class="n">Object</span> <span class="nf">handle</span><span class="o">(</span><span class="n">Request</span> <span class="n">request</span><span class="o">,</span> <span class="n">Response</span> <span class="n">response</span><span class="o">)</span> <span class="o">{</span>
+            <span class="n">String</span> <span class="n">output</span> <span class="o">=</span> <span class="s">"No Message Handled."</span><span class="o">;</span>
+            <span class="c1">//Handle an INS message, in this case we will listen for Fraud Status Changed</span>
+            <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">params</span> <span class="o">=</span> <span class="k">new</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;();</span>
+            <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"vendor_id"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"vendor_id"</span><span class="o">));</span>
+            <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"invoice_id"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"invoice_id"</span><span class="o">));</span>
+            <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"sale_id"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"sale_id"</span><span class="o">));</span>
+            <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"md5_hash"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"md5_hash"</span><span class="o">));</span>
+            <span class="n">Boolean</span> <span class="n">result</span> <span class="o">=</span> <span class="n">TwocheckoutNotification</span><span class="o">.</span><span class="na">check</span><span class="o">(</span><span class="n">params</span><span class="o">,</span> <span class="s">"tango"</span><span class="o">);</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+                <span class="k">if</span> <span class="o">(</span><span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"message_type"</span><span class="o">).</span><span class="na">equals</span><span class="o">(</span><span class="s">"FRAUD_STATUS_CHANGED"</span><span class="o">)</span> <span class="o">&amp;&amp;</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"fraud_status"</span><span class="o">).</span><span class="na">equals</span><span class="o">(</span><span class="s">"pass"</span><span class="o">))</span> <span class="o">{</span>
+                    <span class="c1">//Here you can deliver the product or do whatever you want</span>
+                    <span class="n">SendMail</span><span class="o">.</span><span class="na">send</span><span class="o">(</span><span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"customer_email"</span><span class="o">));</span>
+                    <span class="n">output</span> <span class="o">=</span> <span class="s">"Success"</span><span class="o">;</span>
+                <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+                    <span class="c1">//Here you can contact the buyer or do whatever you want</span>
+                    <span class="n">output</span> <span class="o">=</span> <span class="s">"Fail"</span><span class="o">;</span>
+                <span class="o">}</span>
+            <span class="o">}</span>
+            <span class="k">return</span> <span class="n">output</span><span class="o">;</span>
+        <span class="o">}</span>
+    <span class="o">});</span>
+
+</pre></div>
+
+<p>We grab the message parameters and assign the <code>vendor_id</code>, <code>invoice_id</code>, <code>sale_id</code> and <code>md5_hash</code> values to a new params HashMap.</p>
+
+<div class="highlight"><pre>    <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">params</span> <span class="o">=</span> <span class="k">new</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;();</span>
+    <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"vendor_id"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"vendor_id"</span><span class="o">));</span>
+    <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"invoice_id"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"invoice_id"</span><span class="o">));</span>
+    <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"sale_id"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"sale_id"</span><span class="o">));</span>
+    <span class="n">params</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">"md5_hash"</span><span class="o">,</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"md5_hash"</span><span class="o">));</span>
+</pre></div>
+
+<p>Then we pass the HashMap and our secret word to the <code>Notification.check()</code> binding as the first argument and our secret word as the second argument. This method will return true if the hash matches.</p>
+
+<div class="highlight"><pre>    <span class="n">Boolean</span> <span class="n">result</span> <span class="o">=</span> <span class="n">TwocheckoutNotification</span><span class="o">.</span><span class="na">check</span><span class="o">(</span><span class="n">params</span><span class="o">,</span> <span class="s">"tango"</span><span class="o">);</span>
+</pre></div>
+
+<p>If the response is true, we can preform actions based on the <code>message_type</code> parameter value.</p>
+
+<p>For the Fraud Status Changed message, we will also check the value of the <code>fraud_status</code> parameter and only send the product if it equals 'pass'.</p>
+
+<div class="highlight"><pre>    <span class="k">if</span> <span class="o">(</span><span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"message_type"</span><span class="o">).</span><span class="na">equals</span><span class="o">(</span><span class="s">"FRAUD_STATUS_CHANGED"</span><span class="o">)</span> <span class="o">&amp;&amp;</span> <span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"fraud_status"</span><span class="o">).</span><span class="na">equals</span><span class="o">(</span><span class="s">"pass"</span><span class="o">))</span> <span class="o">{</span>
+            <span class="c1">//Here you can deliver the product or do whatever you want</span>
+            <span class="n">SendMail</span><span class="o">.</span><span class="na">send</span><span class="o">(</span><span class="n">request</span><span class="o">.</span><span class="na">queryParams</span><span class="o">(</span><span class="s">"customer_email"</span><span class="o">));</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="s">"Success"</span><span class="o">;</span>
+        <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+            <span class="c1">//Here you can contact the buyer or do whatever you want</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="s">"Fail"</span><span class="o">;</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+    <span class="k">return</span> <span class="n">output</span><span class="o">;</span>
+</pre></div>
+
+<p>Now we can setup our Notification URL path "http://localhost:4567/notification" and enable the Fraud Status Changed message under the Notifications page in our 2Checkout admin.</p>
+
+<p><img src="http://github.com/2checkout/2checkout-java-tutorial/raw/master/img/egood-6.png" alt=""></p>
+
+<p>Lets test our notification function. Now there are a couple ways to go about this. You can wait for the notifications to come on a live sale, or just head over to the <a href="http://developers.2checkout.com/inss">INS testing tool</a> and test the messages right now. Remember the MD5 hash must match so for easy testing, you must compute the hash based on like below:</p>
+
+<p><code>UPPERCASE(MD5_ENCRYPTED(sale\_id + vendor\_id + invoice\_id + Secret Word))</code></p>
+
+<p>You can just use an <a href="https://www.google.com/webhp?q=md5+generator">online MD5 Hash generatorr</a> and convert it to uppercase.</p>
+
+<h2>Conclusion</h2>
+
+<p>Now our application is fully integrated! Our buyers can pay for the product and we wither email it to them immediately or wait for fraud review.</p>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">2Checkout Java Tutorial maintained by <a href="https://github.com/2Checkout">2Checkout</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
